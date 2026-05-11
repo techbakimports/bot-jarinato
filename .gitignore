@@ -1,0 +1,29 @@
+# Dependências
+node_modules/
+
+# Sessão WhatsApp (credenciais sensíveis)
+auth_info/
+
+# Variáveis de ambiente
+.env
+infra/.env
+
+# Dados locais
+data/
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

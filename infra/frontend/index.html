@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechBak — Painel de Atendimento</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    [v-cloak] { display: none; }
+    .msg-enter-active { transition: all 0.2s ease; }
+    .msg-enter-from  { opacity: 0; transform: translateY(6px); }
+    #chat-body { scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen overflow-hidden">
+
+<div id="app" v-cloak>
+
+  <!-- ── LOGIN ─────────────────────────────────────────────────────────────── -->
+  <div v-if="!token" class="flex items-center justify-center h-screen">
+    <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
+      <h1 class="text-2xl font-bold text-gray-800 mb-1">TechBak</h1>
+      <p class="text-sm text-gray-500 mb-6">Painel de Atendimento</p>
+      <form @submit.prevent="login">
+        <label class="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+        <input v-model="form.email" type="email" required
+               class="w-full border rounded-lg px-3 py-2 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+        <label class="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+        <input v-model="form.senha" type="password" required
+               class="w-full border rounded-lg px-3 py-2 mb-6 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+        <p v-if="loginErro" class="text-red-500 text-sm mb-3">{{ loginErro }}</p>
+        <button type="submit" :disabled="carregando"
+                class="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-semibold rounded-lg py-2 transition">
+          {{ carregando ? 'Entrando...' : 'Entrar' }}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── PAINEL PRINCIPAL ──────────────────────────────────────────────────── -->
+  <div v-else class="flex h-screen">
+
+    <!-- Sidebar -->
+    <aside class="w-80 bg-white border-r flex flex-col">
+      <div class="p-4 border-b flex items-center justify-between">
+        <div>
+          <p class="font-semibold text-gray-800">{{ atendente.nome }}</p>
+          <p class="text-xs text-gray-400">{{ atendente.email }}</p>
+        </div>
+        <button @click="sair" class="text-xs text-gray-400 hover:text-red-500 transition">Sair</button>
+      </div>
+
+      <!-- Abas de status -->
+      <div class="flex border-b">
+        <button v-for="aba in abas" :key="aba.status"
+                @click="abaAtiva = aba.status"
+                :class="['flex-1 py-2 text-xs font-medium transition',
+                         abaAtiva === aba.status
+                           ? 'border-b-2 border-green-500 text-green-600'
+                           : 'text-gray-500 hover:text-gray-700']">
+          {{ aba.label }}
+          <span v-if="aba.status === 'aguardando' && ticketsAguardando.length"
+                class="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5">
+            {{ ticketsAguardando.length }}
+          </span>
+        </button>
+      </div>
+
+      <!-- Lista de tickets -->
+      <div class="flex-1 overflow-y-auto">
+        <div v-if="ticketsFiltrados.length === 0" class="p-6 text-center text-sm text-gray-400">
+          Nenhum ticket nesta fila.
+        </div>
+        <button v-for="t in ticketsFiltrados" :key="t.id"
+                @click="abrirTicket(t)"
+                :class="['w-full text-left p-4 border-b hover:bg-gray-50 transition',
+                         ticketAtivo?.id === t.id ? 'bg-green-50 border-l-4 border-l-green-500' : '']">
+          <div class="flex justify-between items-start">
+            <p class="font-medium text-sm text-gray-800 truncate">
+              {{ t.nome_cliente || formatJid(t.remote_jid) }}
+            </p>
+            <span :class="['text-xs px-1.5 py-0.5 rounded-full ml-2 shrink-0',
+                           t.status === 'aguardando' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700']">
+              {{ t.status === 'aguardando' ? 'aguardando' : 'em atend.' }}
+            </span>
+          </div>
+          <p class="text-xs text-gray-400 mt-0.5">{{ formatHora(t.created_at) }}</p>
+          <!-- badge Odoo -->
+          <span v-if="t.odoo_dados" class="text-xs text-blue-500 mt-0.5 block">● Odoo</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Área de chat -->
+    <main class="flex-1 flex flex-col bg-gray-50 min-w-0">
+
+      <!-- Sem ticket selecionado -->
+      <div v-if="!ticketAtivo" class="flex-1 flex items-center justify-center text-gray-400 text-sm">
+        Selecione um ticket na lista para começar o atendimento.
+      </div>
+
+      <!-- Chat aberto -->
+      <template v-else>
+        <!-- Header do chat -->
+        <div class="bg-white border-b px-6 py-3 flex items-center justify-between shadow-sm">
+          <div>
+            <p class="font-semibold text-gray-800">
+              {{ ticketAtivo.nome_cliente || formatJid(ticketAtivo.remote_jid) }}
+            </p>
+            <p class="text-xs text-gray-400">{{ formatJid(ticketAtivo.remote_jid) }}</p>
+          </div>
+          <div class="flex gap-2">
+            <button v-if="ticketAtivo.status === 'aguardando'"
+                    @click="assumir"
+                    class="bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition">
+              Assumir atendimento
+            </button>
+            <button v-if="ticketAtivo.status === 'em_atendimento'"
+                    @click="encerrar"
+                    class="bg-red-500 hover:bg-red-600 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition">
+              Encerrar ticket
+            </button>
+          </div>
+        </div>
+
+        <!-- Painel Odoo (colapsável) -->
+        <div v-if="ticketAtivo.odoo_dados" class="bg-blue-50 border-b px-6 py-2 text-xs">
+          <button @click="mostrarOdoo = !mostrarOdoo"
+                  class="font-medium text-blue-700 hover:text-blue-900 flex items-center gap-1 transition">
+            <span>{{ mostrarOdoo ? '▼' : '▶' }}</span>
+            Dados do cliente — Odoo
+          </button>
+          <div v-if="mostrarOdoo" class="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-gray-700">
+            <div><span class="text-gray-400">Nome: </span>{{ ticketAtivo.odoo_dados.nome || '—' }}</div>
+            <div><span class="text-gray-400">CPF/CNPJ: </span>{{ ticketAtivo.odoo_dados.cpf_cnpj || '—' }}</div>
+            <div><span class="text-gray-400">E-mail: </span>{{ ticketAtivo.odoo_dados.email || '—' }}</div>
+            <div><span class="text-gray-400">Telefone: </span>{{ ticketAtivo.odoo_dados.telefone || '—' }}</div>
+            <div class="col-span-2"><span class="text-gray-400">Endereço: </span>{{ ticketAtivo.odoo_dados.endereco || '—' }}</div>
+            <div v-if="ticketAtivo.odoo_dados.pedidos?.length" class="col-span-2 mt-1">
+              <p class="text-gray-400 mb-1">Últimos pedidos:</p>
+              <div v-for="p in ticketAtivo.odoo_dados.pedidos" :key="p.numero"
+                   class="ml-2 flex gap-3 text-gray-600">
+                <span class="font-mono">{{ p.numero }}</span>
+                <span>{{ p.data }}</span>
+                <span class="font-medium">R$ {{ Number(p.valor).toFixed(2) }}</span>
+                <span :class="p.status === 'done' ? 'text-green-600' : 'text-blue-600'">
+                  {{ p.status === 'done' ? 'entregue' : 'confirmado' }}
+                </span>
+              </div>
+            </div>
+            <div v-else class="col-span-2 text-gray-400 italic">Sem pedidos registrados.</div>
+          </div>
+        </div>
+        <div v-else-if="ticketAtivo" class="bg-gray-100 border-b px-6 py-1.5 text-xs text-gray-400 italic">
+          Cliente não encontrado no Odoo.
+        </div>
+
+        <!-- Mensagens -->
+        <div id="chat-body" class="flex-1 overflow-y-auto p-6 space-y-3">
+          <transition-group name="msg">
+            <div v-for="m in mensagens" :key="m.id"
+                 :class="['flex', m.de_cliente ? 'justify-start' : 'justify-end']">
+              <div :class="['max-w-xs lg:max-w-md px-4 py-2 rounded-2xl text-sm shadow-sm',
+                            m.de_cliente
+                              ? 'bg-white text-gray-800 rounded-tl-none'
+                              : 'bg-green-500 text-white rounded-tr-none']">
+                <p class="whitespace-pre-wrap break-words">{{ m.conteudo }}</p>
+                <p :class="['text-xs mt-1', m.de_cliente ? 'text-gray-400' : 'text-green-100']">
+                  {{ formatHora(m.created_at) }}
+                </p>
+              </div>
+            </div>
+          </transition-group>
+          <div ref="chatFim"></div>
+        </div>
+
+        <!-- Input de mensagem -->
+        <div v-if="ticketAtivo.status === 'em_atendimento'"
+             class="bg-white border-t p-4 flex gap-3 items-end">
+          <textarea v-model="textoMensagem"
+                    @keydown.enter.exact.prevent="enviarMensagem"
+                    placeholder="Digite a mensagem... (Enter para enviar, Shift+Enter para nova linha)"
+                    rows="1"
+                    class="flex-1 border rounded-xl px-4 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-400"
+                    style="max-height:120px;overflow-y:auto;"></textarea>
+          <button @click="enviarMensagem" :disabled="!textoMensagem.trim() || enviando"
+                  class="bg-green-500 hover:bg-green-600 disabled:opacity-40 text-white rounded-xl px-4 py-2 text-sm font-medium transition shrink-0">
+            {{ enviando ? '...' : 'Enviar' }}
+          </button>
+        </div>
+        <div v-else-if="ticketAtivo.status === 'aguardando'"
+             class="bg-yellow-50 border-t px-6 py-3 text-sm text-yellow-700 text-center">
+          Clique em <strong>Assumir atendimento</strong> para poder responder.
+        </div>
+        <div v-else class="bg-gray-100 border-t px-6 py-3 text-sm text-gray-400 text-center">
+          Ticket encerrado.
+        </div>
+      </template>
+
+    </main>
+  </div>
+
+</div>
+
+<script>
+const { createApp, ref, computed, nextTick, onMounted, onUnmounted } = Vue;
+
+const API = 'http://localhost:8000';
+
+createApp({
+  setup() {
+    // ── Auth ─────────────────────────────────────────────────────────────────
+    const token      = ref(localStorage.getItem('tb_token') || '');
+    const atendente  = ref(JSON.parse(localStorage.getItem('tb_atendente') || 'null'));
+    const form       = ref({ email: '', senha: '' });
+    const loginErro  = ref('');
+    const carregando = ref(false);
+
+    async function login() {
+      loginErro.value  = '';
+      carregando.value = true;
+      try {
+        const r = await fetch(`${API}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: form.value.email, senha: form.value.senha }),
+        });
+        if (!r.ok) { loginErro.value = 'E-mail ou senha incorretos.'; return; }
+        const data = await r.json();
+        token.value     = data.access_token;
+        atendente.value = data.atendente;
+        localStorage.setItem('tb_token', data.access_token);
+        localStorage.setItem('tb_atendente', JSON.stringify(data.atendente));
+        iniciarPainel();
+      } catch {
+        loginErro.value = 'Erro ao conectar com o servidor.';
+      } finally {
+        carregando.value = false;
+      }
+    }
+
+    function sair() {
+      token.value = '';
+      atendente.value = null;
+      localStorage.removeItem('tb_token');
+      localStorage.removeItem('tb_atendente');
+      desconectarWs();
+    }
+
+    // ── Tickets ───────────────────────────────────────────────────────────────
+    const tickets         = ref([]);
+    const ticketAtivo     = ref(null);
+    const mensagens       = ref([]);
+    const abaAtiva        = ref('aguardando');
+    const mostrarOdoo     = ref(false);
+    const chatFim         = ref(null);
+
+    const abas = [
+      { status: 'aguardando',     label: 'Aguardando' },
+      { status: 'em_atendimento', label: 'Em atendimento' },
+      { status: 'encerrado',      label: 'Encerrados' },
+    ];
+
+    const ticketsFiltrados  = computed(() => tickets.value.filter(t => t.status === abaAtiva.value));
+    const ticketsAguardando = computed(() => tickets.value.filter(t => t.status === 'aguardando'));
+
+    function headers() {
+      return { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` };
+    }
+
+    async function carregarTickets() {
+      const statuses = ['aguardando', 'em_atendimento', 'encerrado'];
+      const resultados = await Promise.all(
+        statuses.map(s => fetch(`${API}/tickets?status=${s}`, { headers: headers() }).then(r => r.json()))
+      );
+      const novos = resultados.flat();
+      tickets.value = novos;
+      // Atualiza o ticket ativo se ainda existir
+      if (ticketAtivo.value) {
+        ticketAtivo.value = novos.find(t => t.id === ticketAtivo.value.id) || null;
+      }
+    }
+
+    async function abrirTicket(t) {
+      ticketAtivo.value = t;
+      mostrarOdoo.value = false;
+      mensagens.value   = [];
+      const r = await fetch(`${API}/tickets/${t.id}/mensagens`, { headers: headers() });
+      mensagens.value = await r.json();
+      scrollFim();
+    }
+
+    async function assumir() {
+      await fetch(`${API}/tickets/${ticketAtivo.value.id}/assumir`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ atendente_id: atendente.value.id }),
+      });
+      await carregarTickets();
+    }
+
+    async function encerrar() {
+      if (!confirm('Encerrar este ticket?')) return;
+      await fetch(`${API}/tickets/${ticketAtivo.value.id}/encerrar`, {
+        method: 'POST', headers: headers(),
+      });
+      ticketAtivo.value = null;
+      await carregarTickets();
+    }
+
+    // ── Envio de mensagem ──────────────────────────────────────────────────
+    const textoMensagem = ref('');
+    const enviando      = ref(false);
+
+    async function enviarMensagem() {
+      const texto = textoMensagem.value.trim();
+      if (!texto || enviando.value) return;
+      enviando.value = true;
+      try {
+        await fetch(`${API}/tickets/${ticketAtivo.value.id}/enviar`, {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify({ conteudo: texto }),
+        });
+        textoMensagem.value = '';
+      } finally {
+        enviando.value = false;
+      }
+    }
+
+    // ── WebSocket ─────────────────────────────────────────────────────────
+    let ws = null;
+
+    function conectarWs() {
+      ws = new WebSocket(`ws://localhost:8000/ws`);
+
+      ws.onmessage = async (e) => {
+        const msg = JSON.parse(e.data);
+
+        if (msg.tipo === 'novo_ticket' || msg.tipo === 'ticket_assumido' || msg.tipo === 'ticket_encerrado') {
+          await carregarTickets();
+        }
+
+        if (msg.tipo === 'nova_mensagem' && ticketAtivo.value?.id === msg.ticket_id) {
+          mensagens.value.push({
+            id: Date.now(), conteudo: msg.conteudo, de_cliente: true, created_at: new Date().toISOString(),
+          });
+          scrollFim();
+        }
+
+        if (msg.tipo === 'mensagem_enviada' && ticketAtivo.value?.id === msg.ticket_id) {
+          mensagens.value.push({
+            id: Date.now(), conteudo: msg.conteudo, de_cliente: false, created_at: new Date().toISOString(),
+          });
+          scrollFim();
+        }
+      };
+
+      ws.onclose = () => {
+        if (token.value) setTimeout(conectarWs, 3000);
+      };
+    }
+
+    function desconectarWs() { ws?.close(); ws = null; }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+    function formatJid(jid) {
+      return jid?.replace('@s.whatsapp.net', '').replace('@g.us', '') || '—';
+    }
+
+    function formatHora(iso) {
+      if (!iso) return '';
+      return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function scrollFim() {
+      nextTick(() => chatFim.value?.scrollIntoView({ behavior: 'smooth' }));
+    }
+
+    async function iniciarPainel() {
+      await carregarTickets();
+      conectarWs();
+    }
+
+    onMounted(() => { if (token.value) iniciarPainel(); });
+    onUnmounted(() => desconectarWs());
+
+    return {
+      token, atendente, form, loginErro, carregando, login, sair,
+      tickets, ticketAtivo, mensagens, abaAtiva, mostrarOdoo, chatFim, abas,
+      ticketsFiltrados, ticketsAguardando,
+      abrirTicket, assumir, encerrar,
+      textoMensagem, enviando, enviarMensagem,
+      formatJid, formatHora,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

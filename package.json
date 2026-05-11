@@ -1,0 +1,20 @@
+{
+  "name": "bot-what",
+  "version": "1.0.0",
+  "description": "Este documento contém o guia de implementação para o bot de atendimento ao usuário utilizando a API oficial da Meta.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc10",
+    "dotenv": "^17.4.2",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "bot-what-infra-scripts",
+  "version": "1.0.0",
+  "description": "Scripts de configuração da infraestrutura — Fase 2",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "instance": "node setup.js instance",
+    "status":   "node setup.js status",
+    "typebot":  "node setup.js typebot",
+    "webhook":  "node setup.js webhook",
+    "all":      "node setup.js all"
+  }
+}

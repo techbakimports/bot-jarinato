@@ -1,0 +1,213 @@
+version: '3.8'
+
+services:
+
+  # ─── WhatsApp Engine ────────────────────────────────────────────────────────
+  evolution_api:
+    image: atendai/evolution-api:v2.2.3
+    container_name: evolution_api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_URL: ${EVOLUTION_SERVER_URL}
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:${POSTGRES_EVOLUTION_PASSWORD}@postgres_evolution:5432/evolution
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_api
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://:${REDIS_PASSWORD}@redis:6379/6
+      CACHE_REDIS_PREFIX_KEY: evolution
+      LOG_LEVEL: ERROR
+      LOG_COLOR: "true"
+      DEL_INSTANCE: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+    depends_on:
+      postgres_evolution:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bot_network
+
+  # ─── Bot Visual (Fluxos) ─────────────────────────────────────────────────────
+  typebot_builder:
+    image: baptistearno/typebot-builder:latest
+    container_name: typebot_builder
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://typebot:${POSTGRES_TYPEBOT_PASSWORD}@postgres_typebot:5432/typebot
+      NEXTAUTH_URL: ${TYPEBOT_BUILDER_URL}
+      NEXTAUTH_SECRET: ${TYPEBOT_SECRET}
+      NEXT_PUBLIC_VIEWER_URL: ${TYPEBOT_VIEWER_URL}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      DISABLE_SIGNUP: "false"
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      NEXT_PUBLIC_SMTP_FROM: ${SMTP_FROM:-noreply@exemplo.com}
+    depends_on:
+      postgres_typebot:
+        condition: service_healthy
+    networks:
+      - bot_network
+
+  typebot_viewer:
+    image: baptistearno/typebot-viewer:latest
+    container_name: typebot_viewer
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      DATABASE_URL: postgresql://typebot:${POSTGRES_TYPEBOT_PASSWORD}@postgres_typebot:5432/typebot
+      NEXTAUTH_URL: ${TYPEBOT_BUILDER_URL}
+      NEXTAUTH_SECRET: ${TYPEBOT_SECRET}
+      NEXT_PUBLIC_VIEWER_URL: ${TYPEBOT_VIEWER_URL}
+    depends_on:
+      postgres_typebot:
+        condition: service_healthy
+    networks:
+      - bot_network
+
+  # ─── Bancos de Dados ─────────────────────────────────────────────────────────
+  postgres_evolution:
+    image: postgres:16-alpine
+    container_name: postgres_evolution
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${POSTGRES_EVOLUTION_PASSWORD}
+    volumes:
+      - postgres_evolution_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot_network
+
+  postgres_typebot:
+    image: postgres:16-alpine
+    container_name: postgres_typebot
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: typebot
+      POSTGRES_USER: typebot
+      POSTGRES_PASSWORD: ${POSTGRES_TYPEBOT_PASSWORD}
+    volumes:
+      - postgres_typebot_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U typebot -d typebot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot_network
+
+  # Banco do FastAPI (Fase 3) — já criado para não precisar recriar a rede depois
+  postgres_app:
+    image: postgres:16-alpine
+    container_name: postgres_app
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: tickets_db
+      POSTGRES_USER: tickets_user
+      POSTGRES_PASSWORD: ${POSTGRES_APP_PASSWORD}
+    volumes:
+      - postgres_app_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tickets_user -d tickets_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot_network
+
+  # ─── Painel de Atendimento (Frontend) ───────────────────────────────────────
+  frontend:
+    image: nginx:alpine
+    container_name: frontend_painel
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    networks:
+      - bot_network
+
+  # ─── Backend FastAPI ─────────────────────────────────────────────────────────
+  fastapi:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fastapi_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tickets_user:${POSTGRES_APP_PASSWORD}@postgres_app:5432/tickets_db
+      EVOLUTION_URL: http://evolution_api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      # Odoo (opcional)
+      ODOO_URL: ${ODOO_URL:-}
+      ODOO_DB: ${ODOO_DB:-}
+      ODOO_USER: ${ODOO_USER:-}
+      ODOO_PASSWORD: ${ODOO_PASSWORD:-}
+      # Notificações SMTP (opcional)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@techbak.com}
+      NOTIF_EMAIL_DESTINO: ${NOTIF_EMAIL_DESTINO:-}
+      PAINEL_URL: ${PAINEL_URL:-http://localhost}
+    depends_on:
+      postgres_app:
+        condition: service_healthy
+      evolution_api:
+        condition: service_started
+    networks:
+      - bot_network
+
+  # ─── Cache / Filas ───────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot_network
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  evolution_instances:
+  evolution_store:
+  postgres_evolution_data:
+  postgres_typebot_data:
+  postgres_app_data:
+  redis_data:
+
+# ─── Rede interna ─────────────────────────────────────────────────────────────
+networks:
+  bot_network:
+    driver: bridge
