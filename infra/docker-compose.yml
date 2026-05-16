@@ -48,11 +48,12 @@ services:
       NEXT_PUBLIC_VIEWER_URL: ${TYPEBOT_VIEWER_URL}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       DISABLE_SIGNUP: "false"
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      NEXT_PUBLIC_SMTP_FROM: ${SMTP_FROM:-noreply@exemplo.com}
+      ENCRYPTION_SECRET: ${TYPEBOT_ENCRYPTION_SECRET}
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_USERNAME: local
+      SMTP_PASSWORD: local
+      NEXT_PUBLIC_SMTP_FROM: noreply@techbak.com
     depends_on:
       postgres_typebot:
         condition: service_healthy
@@ -70,6 +71,7 @@ services:
       NEXTAUTH_URL: ${TYPEBOT_BUILDER_URL}
       NEXTAUTH_SECRET: ${TYPEBOT_SECRET}
       NEXT_PUBLIC_VIEWER_URL: ${TYPEBOT_VIEWER_URL}
+      ENCRYPTION_SECRET: ${TYPEBOT_ENCRYPTION_SECRET}
     depends_on:
       postgres_typebot:
         condition: service_healthy
@@ -179,6 +181,17 @@ services:
         condition: service_healthy
       evolution_api:
         condition: service_started
+    networks:
+      - bot_network
+
+  # ─── SMTP local para desenvolvimento ─────────────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
     networks:
       - bot_network
 
