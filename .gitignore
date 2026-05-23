@@ -30,3 +30,6 @@ desktop.ini
 
 # Claude Code (configurações locais)
 .claude/settings.local.json
+
+# Claude Code
+CLAUDE.md
