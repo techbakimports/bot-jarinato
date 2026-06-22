@@ -4,7 +4,7 @@ services:
 
   # ─── WhatsApp Engine ────────────────────────────────────────────────────────
   evolution_api:
-    image: atendai/evolution-api:v2.2.3
+    image: atendai/evolution-api:v2.1.1
     container_name: evolution_api
     restart: unless-stopped
     ports:
@@ -20,7 +20,7 @@ services:
       CACHE_REDIS_ENABLED: "true"
       CACHE_REDIS_URI: redis://:${REDIS_PASSWORD}@redis:6379/6
       CACHE_REDIS_PREFIX_KEY: evolution
-      LOG_LEVEL: ERROR
+      LOG_LEVEL: DEBUG
       LOG_COLOR: "true"
       DEL_INSTANCE: "false"
     volumes:
@@ -176,6 +176,11 @@ services:
       SMTP_FROM: ${SMTP_FROM:-noreply@techbak.com}
       NOTIF_EMAIL_DESTINO: ${NOTIF_EMAIL_DESTINO:-}
       PAINEL_URL: ${PAINEL_URL:-http://localhost}
+      # Typebot (para sync via painel)
+      TYPEBOT_BUILDER_URL: ${TYPEBOT_BUILDER_URL:-http://typebot_builder:3000}
+      TYPEBOT_TOKEN: ${TYPEBOT_TOKEN:-}
+      TYPEBOT_ID: ${TYPEBOT_ID:-}
+      TYPEBOT_START_EVENT_ID: ${TYPEBOT_START_EVENT_ID:-}
     depends_on:
       postgres_app:
         condition: service_healthy
