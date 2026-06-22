@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     odoo_user: Optional[str] = None
     odoo_password: Optional[str] = None
 
+    # Typebot (para sincronização do fluxo via painel)
+    typebot_builder_url: str = "http://localhost:3001"
+    typebot_token: Optional[str] = None
+    typebot_id: Optional[str] = None
+    typebot_start_event_id: Optional[str] = None
+
     # SMTP para notificações (opcional — deixar em branco para desabilitar)
     smtp_host: Optional[str] = None
     smtp_port: int = 587

@@ -16,6 +16,12 @@ class AtendenteOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AtendenteRegister(BaseModel):
+    nome: str
+    email: str
+    senha: str
+
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"

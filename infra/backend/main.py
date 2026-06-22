@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import create_tables
-from app.routers import webhook, auth, tickets, ws
+from app.routers import webhook, auth, tickets, ws, bot_config
 
 
 @asynccontextmanager
@@ -24,6 +24,7 @@ app.include_router(webhook.router)
 app.include_router(auth.router)
 app.include_router(tickets.router)
 app.include_router(ws.router)
+app.include_router(bot_config.router)
 
 
 @app.get("/health")
