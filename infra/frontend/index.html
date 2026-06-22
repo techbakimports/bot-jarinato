@@ -48,52 +48,78 @@
           <p class="font-semibold text-gray-800">{{ atendente.nome }}</p>
           <p class="text-xs text-gray-400">{{ atendente.email }}</p>
         </div>
-        <button @click="sair" class="text-xs text-gray-400 hover:text-red-500 transition">Sair</button>
-      </div>
-
-      <!-- Abas de status -->
-      <div class="flex border-b">
-        <button v-for="aba in abas" :key="aba.status"
-                @click="abaAtiva = aba.status"
-                :class="['flex-1 py-2 text-xs font-medium transition',
-                         abaAtiva === aba.status
-                           ? 'border-b-2 border-green-500 text-green-600'
-                           : 'text-gray-500 hover:text-gray-700']">
-          {{ aba.label }}
-          <span v-if="aba.status === 'aguardando' && ticketsAguardando.length"
-                class="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5">
-            {{ ticketsAguardando.length }}
-          </span>
-        </button>
-      </div>
-
-      <!-- Lista de tickets -->
-      <div class="flex-1 overflow-y-auto">
-        <div v-if="ticketsFiltrados.length === 0" class="p-6 text-center text-sm text-gray-400">
-          Nenhum ticket nesta fila.
+        <div class="flex items-center gap-3">
+          <button @click="paginaAtual = paginaAtual === 'config' ? 'tickets' : 'config'"
+                  :class="['text-xs transition', paginaAtual === 'config' ? 'text-green-600 font-semibold' : 'text-gray-400 hover:text-green-500']"
+                  :title="paginaAtual === 'config' ? 'Voltar aos tickets' : 'Configurar Bot'">
+            {{ paginaAtual === 'config' ? '← Tickets' : '⚙️ Config' }}
+          </button>
+          <button @click="sair" class="text-xs text-gray-400 hover:text-red-500 transition">Sair</button>
         </div>
-        <button v-for="t in ticketsFiltrados" :key="t.id"
-                @click="abrirTicket(t)"
-                :class="['w-full text-left p-4 border-b hover:bg-gray-50 transition',
-                         ticketAtivo?.id === t.id ? 'bg-green-50 border-l-4 border-l-green-500' : '']">
-          <div class="flex justify-between items-start">
-            <p class="font-medium text-sm text-gray-800 truncate">
-              {{ t.nome_cliente || formatJid(t.remote_jid) }}
-            </p>
-            <span :class="['text-xs px-1.5 py-0.5 rounded-full ml-2 shrink-0',
-                           t.status === 'aguardando' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700']">
-              {{ t.status === 'aguardando' ? 'aguardando' : 'em atend.' }}
-            </span>
-          </div>
-          <p class="text-xs text-gray-400 mt-0.5">{{ formatHora(t.created_at) }}</p>
-          <!-- badge Odoo -->
-          <span v-if="t.odoo_dados" class="text-xs text-blue-500 mt-0.5 block">● Odoo</span>
-        </button>
       </div>
+
+      <!-- ── SIDEBAR: Tickets (quando não está em config) ── -->
+      <template v-if="paginaAtual === 'tickets'">
+        <!-- Abas de status -->
+        <div class="flex border-b">
+          <button v-for="aba in abas" :key="aba.status"
+                  @click="abaAtiva = aba.status"
+                  :class="['flex-1 py-2 text-xs font-medium transition',
+                           abaAtiva === aba.status
+                             ? 'border-b-2 border-green-500 text-green-600'
+                             : 'text-gray-500 hover:text-gray-700']">
+            {{ aba.label }}
+            <span v-if="aba.status === 'aguardando' && ticketsAguardando.length"
+                  class="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5">
+              {{ ticketsAguardando.length }}
+            </span>
+          </button>
+        </div>
+
+        <!-- Lista de tickets -->
+        <div class="flex-1 overflow-y-auto">
+          <div v-if="ticketsFiltrados.length === 0" class="p-6 text-center text-sm text-gray-400">
+            Nenhum ticket nesta fila.
+          </div>
+          <button v-for="t in ticketsFiltrados" :key="t.id"
+                  @click="abrirTicket(t)"
+                  :class="['w-full text-left p-4 border-b hover:bg-gray-50 transition',
+                           ticketAtivo?.id === t.id ? 'bg-green-50 border-l-4 border-l-green-500' : '']">
+            <div class="flex justify-between items-start">
+              <p class="font-medium text-sm text-gray-800 truncate">
+                {{ t.nome_cliente || formatJid(t.remote_jid) }}
+              </p>
+              <span :class="['text-xs px-1.5 py-0.5 rounded-full ml-2 shrink-0',
+                             t.status === 'aguardando' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700']">
+                {{ t.status === 'aguardando' ? 'aguardando' : 'em atend.' }}
+              </span>
+            </div>
+            <p class="text-xs text-gray-400 mt-0.5">{{ formatHora(t.created_at) }}</p>
+            <!-- badge Odoo -->
+            <span v-if="t.odoo_dados" class="text-xs text-blue-500 mt-0.5 block">● Odoo</span>
+          </button>
+        </div>
+      </template>
+
+      <!-- ── SIDEBAR: Menu config (quando está em config) ── -->
+      <template v-else>
+        <div class="flex-1 overflow-y-auto">
+          <button v-for="sec in configSections" :key="sec.id"
+                  @click="configSecaoAtiva = sec.id"
+                  :class="['w-full text-left p-4 border-b hover:bg-gray-50 transition flex items-center gap-3',
+                           configSecaoAtiva === sec.id ? 'bg-green-50 border-l-4 border-l-green-500' : '']">
+            <span class="text-lg">{{ sec.icon }}</span>
+            <div>
+              <p class="font-medium text-sm text-gray-800">{{ sec.label }}</p>
+              <p class="text-xs text-gray-400">{{ sec.desc }}</p>
+            </div>
+          </button>
+        </div>
+      </template>
     </aside>
 
-    <!-- Área de chat -->
-    <main class="flex-1 flex flex-col bg-gray-50 min-w-0">
+    <!-- Área de chat (tickets) -->
+    <main v-if="paginaAtual === 'tickets'" class="flex-1 flex flex-col bg-gray-50 min-w-0">
 
       <!-- Sem ticket selecionado -->
       <div v-if="!ticketAtivo" class="flex-1 flex items-center justify-center text-gray-400 text-sm">
@@ -199,12 +225,230 @@
       </template>
 
     </main>
+
+    <!-- ── ÁREA DE CONFIGURAÇÃO DO BOT ─────────────────────────────────────── -->
+    <main v-if="paginaAtual === 'config'" class="flex-1 flex flex-col bg-gray-50 min-w-0 overflow-y-auto">
+      <div class="max-w-3xl mx-auto w-full p-8 space-y-8">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-bold text-gray-800">Configurar Bot</h2>
+            <p class="text-sm text-gray-400">Edite as mensagens, opções e base de conhecimento do bot</p>
+          </div>
+          <div class="flex gap-2">
+            <button @click="salvarConfig" :disabled="configSalvando"
+                    class="bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-medium rounded-lg px-5 py-2 text-sm transition">
+              {{ configSalvando ? 'Salvando...' : '💾 Salvar' }}
+            </button>
+            <button @click="sincronizarTypebot" :disabled="configSincronizando"
+                    class="bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-medium rounded-lg px-5 py-2 text-sm transition">
+              {{ configSincronizando ? 'Sincronizando...' : '🔄 Aplicar no Typebot' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Feedback de status -->
+        <div v-if="configMsg" :class="['rounded-lg px-4 py-3 text-sm', configMsgTipo === 'ok' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200']">
+          {{ configMsg }}
+        </div>
+
+        <!-- Seção: Mensagens -->
+        <div v-if="configSecaoAtiva === 'mensagens'" class="space-y-6">
+          <div class="bg-white rounded-xl shadow-sm p-6 space-y-5">
+            <h3 class="font-semibold text-gray-700 flex items-center gap-2">📝 Mensagens do Fluxo</h3>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Nome da empresa</label>
+              <input v-model="botConfig.company_name" type="text"
+                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Mensagem de boas-vindas</label>
+              <textarea v-model="botConfig.welcome_message" rows="3"
+                        class="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-400"></textarea>
+              <p class="text-xs text-gray-400 mt-1">Primeira mensagem que o cliente recebe ao iniciar o contato.</p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Pergunta do nome</label>
+              <input v-model="botConfig.ask_name_message" type="text"
+                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Texto do menu</label>
+              <input v-model="botConfig.menu_message" type="text"
+                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Mensagem de aguarde</label>
+              <input v-model="botConfig.waiting_message" type="text"
+                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Mensagem de confirmação</label>
+              <textarea v-model="botConfig.confirmation_message" rows="2"
+                        class="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-400"></textarea>
+              <p class="text-xs text-gray-400 mt-1">Use <code class="bg-gray-100 px-1 rounded">{nome}</code> para inserir o nome do cliente.</p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Horário de atendimento</label>
+              <input v-model="botConfig.business_hours" type="text"
+                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Seção: Opções do menu -->
+        <div v-if="configSecaoAtiva === 'menu'" class="space-y-6">
+          <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <h3 class="font-semibold text-gray-700 flex items-center gap-2">📋 Opções do Menu</h3>
+            <p class="text-xs text-gray-400">Botões que o cliente vê ao escolher o motivo do contato. Arraste para reordenar.</p>
+
+            <div v-for="(opt, idx) in botConfig.menu_options" :key="opt.id"
+                 class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg group">
+              <span class="text-gray-300 cursor-grab">⠿</span>
+              <input v-model="opt.emoji" type="text" maxlength="4"
+                     class="w-12 text-center border rounded-lg px-1 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+              <input v-model="opt.label" type="text" placeholder="Nome da opção"
+                     class="flex-1 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+              <button @click="removerOpcaoMenu(idx)"
+                      class="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition text-lg">
+                ✕
+              </button>
+            </div>
+
+            <button @click="adicionarOpcaoMenu"
+                    class="w-full border-2 border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-400 hover:text-green-500 hover:border-green-400 transition">
+              + Adicionar opção
+            </button>
+          </div>
+        </div>
+
+        <!-- Seção: Base de conhecimento -->
+        <div v-if="configSecaoAtiva === 'conhecimento'" class="space-y-6">
+          <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="font-semibold text-gray-700 flex items-center gap-2">🧠 Base de Conhecimento</h3>
+                <p class="text-xs text-gray-400 mt-1">Problemas que o bot sabe resolver automaticamente.</p>
+              </div>
+              <button @click="adicionarConhecimento"
+                      class="bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg px-3 py-1.5 transition">
+                + Novo problema
+              </button>
+            </div>
+
+            <div v-for="(entry, idx) in botConfig.knowledge_base" :key="entry.id"
+                 class="border rounded-lg overflow-hidden">
+              <div @click="toggleConhecimento(idx)"
+                   class="flex items-center justify-between p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition">
+                <div class="flex items-center gap-3">
+                  <span class="text-sm">{{ conhecimentoAberto === idx ? '▼' : '▶' }}</span>
+                  <div>
+                    <p class="font-medium text-sm text-gray-800">{{ entry.title || 'Sem título' }}</p>
+                    <p class="text-xs text-gray-400">{{ entry.tags.length }} tags</p>
+                  </div>
+                </div>
+                <button @click.stop="removerConhecimento(idx)"
+                        class="text-red-400 hover:text-red-600 text-xs transition">Remover</button>
+              </div>
+              <div v-if="conhecimentoAberto === idx" class="p-4 space-y-4 border-t">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Título do problema</label>
+                  <input v-model="entry.title" type="text"
+                         class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Tags (palavras-chave separadas por vírgula)</label>
+                  <input :value="entry.tags.join(', ')" @input="entry.tags = $event.target.value.split(',').map(t => t.trim()).filter(t => t)"
+                         type="text" placeholder="nao liga, nao inicia, morto..."
+                         class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                  <p class="text-xs text-gray-400 mt-1">Use palavras sem acento, em minúsculo. Ex: "nao liga, nao inicia, morto"</p>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Resposta (texto que o cliente recebe)</label>
+                  <textarea v-model="entry.answer" rows="6"
+                            class="w-full border rounded-lg px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-green-400"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="botConfig.knowledge_base.length === 0" class="text-center py-8 text-sm text-gray-400">
+              Nenhum problema cadastrado. Clique em "+ Novo problema" para começar.
+            </div>
+          </div>
+        </div>
+
+        <!-- Seção: Preview -->
+        <div v-if="configSecaoAtiva === 'preview'" class="space-y-6">
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-semibold text-gray-700 flex items-center gap-2 mb-4">👁️ Preview do Fluxo</h3>
+            <p class="text-xs text-gray-400 mb-6">Simulação de como ficará a conversa no WhatsApp.</p>
+
+            <div class="max-w-sm mx-auto bg-green-50 rounded-2xl p-4 space-y-3"
+                 style="background-image: url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2260%22 height=%2260%22><rect width=%2260%22 height=%2260%22 fill=%22%23e8f5e9%22/><path d=%22M0 0h30v30H0zM30 30h30v30H30z%22 fill=%22%23dcedc8%22 opacity=%22.15%22/></svg>');">
+              <!-- Saudação -->
+              <div class="flex justify-start">
+                <div class="bg-white px-4 py-2 rounded-2xl rounded-tl-none shadow-sm text-sm max-w-xs">
+                  <p class="whitespace-pre-wrap">{{ botConfig.welcome_message }}</p>
+                </div>
+              </div>
+              <!-- Pergunta nome -->
+              <div class="flex justify-start">
+                <div class="bg-white px-4 py-2 rounded-2xl rounded-tl-none shadow-sm text-sm max-w-xs">
+                  {{ botConfig.ask_name_message }}
+                </div>
+              </div>
+              <!-- Resposta do cliente -->
+              <div class="flex justify-end">
+                <div class="bg-green-500 text-white px-4 py-2 rounded-2xl rounded-tr-none shadow-sm text-sm">
+                  João
+                </div>
+              </div>
+              <!-- Menu -->
+              <div class="flex justify-start">
+                <div class="bg-white px-4 py-2 rounded-2xl rounded-tl-none shadow-sm text-sm max-w-xs">
+                  <p class="mb-2">{{ botConfig.menu_message }}</p>
+                  <div class="space-y-1">
+                    <div v-for="opt in botConfig.menu_options" :key="opt.id"
+                         class="bg-gray-100 rounded-lg px-3 py-1.5 text-xs text-gray-700">
+                      {{ opt.emoji }} {{ opt.label }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- Aguarde -->
+              <div class="flex justify-start">
+                <div class="bg-white px-4 py-2 rounded-2xl rounded-tl-none shadow-sm text-sm max-w-xs">
+                  {{ botConfig.waiting_message }}
+                </div>
+              </div>
+              <!-- Confirmação -->
+              <div class="flex justify-start">
+                <div class="bg-white px-4 py-2 rounded-2xl rounded-tl-none shadow-sm text-sm max-w-xs">
+                  <p>{{ botConfig.confirmation_message.replace('{nome}', 'João') }}</p>
+                  <p class="mt-1 text-gray-500">🕐 Horário de atendimento: {{ botConfig.business_hours }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
   </div>
 
 </div>
 
 <script>
-const { createApp, ref, computed, nextTick, onMounted, onUnmounted } = Vue;
+const { createApp, ref, reactive, computed, nextTick, watch, onMounted, onUnmounted } = Vue;
 
 const API = 'http://localhost:8000';
 
@@ -383,7 +627,139 @@ createApp({
       conectarWs();
     }
 
-    onMounted(() => { if (token.value) iniciarPainel(); });
+    // ── Configuração do Bot ──────────────────────────────────────────────────
+    const paginaAtual       = ref('tickets');
+    const configSecaoAtiva  = ref('mensagens');
+    const configSalvando    = ref(false);
+    const configSincronizando = ref(false);
+    const configMsg         = ref('');
+    const configMsgTipo     = ref('ok');
+    const conhecimentoAberto = ref(null);
+
+    const configSections = [
+      { id: 'mensagens',    icon: '📝', label: 'Mensagens',           desc: 'Saudação, textos e horário' },
+      { id: 'menu',         icon: '📋', label: 'Opções do Menu',      desc: 'Botões de motivo do contato' },
+      { id: 'conhecimento', icon: '🧠', label: 'Base de Conhecimento', desc: 'Respostas automáticas' },
+      { id: 'preview',      icon: '👁️', label: 'Preview',             desc: 'Simulação da conversa' },
+    ];
+
+    const botConfig = reactive({
+      company_name: 'TechBak Imports',
+      welcome_message: 'Olá! 👋 Bem-vindo ao suporte da *TechBak Imports*.\nVou coletar algumas informações para conectar você com nosso time de atendimento. 😊',
+      ask_name_message: 'Qual é o seu nome?',
+      menu_message: 'Como podemos te ajudar hoje?',
+      menu_options: [
+        { id: 'it1', emoji: '📦', label: 'Rastreamento de pedido' },
+        { id: 'it2', emoji: '🔧', label: 'Suporte técnico' },
+        { id: 'it3', emoji: '💰', label: 'Financeiro / Pagamento' },
+        { id: 'it4', emoji: '❓', label: 'Outra dúvida' },
+      ],
+      waiting_message: '⏳ Aguarde um momento, estou abrindo seu atendimento...',
+      confirmation_message: '✅ Pronto, {nome}! Um atendente foi notificado e vai te responder em breve.',
+      business_hours: 'Segunda a Sexta, das 8h às 18h',
+      knowledge_base: [],
+    });
+
+    async function carregarConfig() {
+      try {
+        const r = await fetch(`${API}/bot/config`);
+        if (r.ok) {
+          const data = await r.json();
+          Object.assign(botConfig, data);
+        }
+      } catch (e) {
+        console.warn('Config não carregada:', e.message);
+      }
+    }
+
+    async function salvarConfig() {
+      configSalvando.value = true;
+      configMsg.value = '';
+      try {
+        const r = await fetch(`${API}/bot/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(botConfig),
+        });
+        const data = await r.json();
+        if (r.ok) {
+          configMsg.value = 'Configuração salva com sucesso!';
+          configMsgTipo.value = 'ok';
+        } else {
+          configMsg.value = data.detail || 'Erro ao salvar.';
+          configMsgTipo.value = 'erro';
+        }
+      } catch (e) {
+        configMsg.value = 'Erro de conexão com o servidor.';
+        configMsgTipo.value = 'erro';
+      } finally {
+        configSalvando.value = false;
+        setTimeout(() => { configMsg.value = ''; }, 5000);
+      }
+    }
+
+    async function sincronizarTypebot() {
+      configSincronizando.value = true;
+      configMsg.value = '';
+      try {
+        // Salva primeiro
+        await fetch(`${API}/bot/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(botConfig),
+        });
+        // Depois sincroniza
+        const r = await fetch(`${API}/bot/config/sync-typebot`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await r.json();
+        if (r.ok) {
+          configMsg.value = 'Fluxo atualizado no Typebot com sucesso!';
+          configMsgTipo.value = 'ok';
+        } else {
+          configMsg.value = data.detail || 'Erro ao sincronizar com Typebot.';
+          configMsgTipo.value = 'erro';
+        }
+      } catch (e) {
+        configMsg.value = 'Erro de conexão. Verifique se o Typebot está rodando.';
+        configMsgTipo.value = 'erro';
+      } finally {
+        configSincronizando.value = false;
+        setTimeout(() => { configMsg.value = ''; }, 8000);
+      }
+    }
+
+    function adicionarOpcaoMenu() {
+      const nextId = `it${Date.now()}`;
+      botConfig.menu_options.push({ id: nextId, emoji: '📌', label: '' });
+    }
+
+    function removerOpcaoMenu(idx) {
+      if (botConfig.menu_options.length <= 1) return;
+      botConfig.menu_options.splice(idx, 1);
+    }
+
+    function adicionarConhecimento() {
+      const newId = `kb_${Date.now()}`;
+      botConfig.knowledge_base.push({ id: newId, title: '', tags: [], answer: '' });
+      conhecimentoAberto.value = botConfig.knowledge_base.length - 1;
+    }
+
+    function removerConhecimento(idx) {
+      botConfig.knowledge_base.splice(idx, 1);
+      conhecimentoAberto.value = null;
+    }
+
+    function toggleConhecimento(idx) {
+      conhecimentoAberto.value = conhecimentoAberto.value === idx ? null : idx;
+    }
+
+    onMounted(() => {
+      if (token.value) iniciarPainel();
+      carregarConfig();
+    });
     onUnmounted(() => desconectarWs());
 
     return {
@@ -393,6 +769,12 @@ createApp({
       abrirTicket, assumir, encerrar,
       textoMensagem, enviando, enviarMensagem,
       formatJid, formatHora,
+      // Config do bot
+      paginaAtual, configSecaoAtiva, configSections, botConfig,
+      configSalvando, configSincronizando, configMsg, configMsgTipo,
+      salvarConfig, sincronizarTypebot,
+      adicionarOpcaoMenu, removerOpcaoMenu,
+      adicionarConhecimento, removerConhecimento, toggleConhecimento, conhecimentoAberto,
     };
   }
 }).mount('#app');

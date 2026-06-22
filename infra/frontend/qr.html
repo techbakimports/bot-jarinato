@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Conectar WhatsApp — TechBak</title>
+  <style>
+    body { font-family: system-ui; background: #111; color: #eee; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .card { background: #1a1a2e; border-radius: 16px; padding: 40px; text-align: center; max-width: 500px; }
+    h1 { font-size: 1.4em; margin-bottom: 8px; }
+    p { color: #888; font-size: 0.9em; }
+    #qr { margin: 20px auto; }
+    #qr img { border-radius: 12px; border: 4px solid #25D366; }
+    #status { margin-top: 16px; padding: 8px 16px; border-radius: 8px; font-weight: 600; }
+    .connecting { background: #fbbf24; color: #000; }
+    .open { background: #22c55e; color: #fff; }
+    .error { background: #ef4444; color: #fff; }
+    button { margin-top: 16px; padding: 10px 24px; background: #25D366; color: #fff; border: none; border-radius: 8px; font-size: 1em; cursor: pointer; }
+    button:hover { background: #128C7E; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Conectar WhatsApp</h1>
+    <p>Escaneie o QR Code com WhatsApp > Dispositivos Vinculados</p>
+    <div id="qr"><p>Carregando...</p></div>
+    <div id="status" class="connecting">Aguardando...</div>
+    <button onclick="refresh()">Atualizar QR Code</button>
+  </div>
+
+  <script>
+    const API = 'http://localhost:8080';
+    const KEY = 'e11c44973d3b6907939b69577e7dc63ddc72e922eb558ba5';
+    const INSTANCE = 'techbak';
+    const headers = { 'apikey': KEY, 'Content-Type': 'application/json' };
+
+    async function checkState() {
+      try {
+        const r = await fetch(`${API}/instance/connectionState/${INSTANCE}`, { headers });
+        const d = await r.json();
+        const state = d?.instance?.state;
+        const el = document.getElementById('status');
+        el.textContent = state === 'open' ? 'Conectado!' : state || 'Desconhecido';
+        el.className = state === 'open' ? 'open' : 'connecting';
+        return state;
+      } catch (e) {
+        document.getElementById('status').textContent = 'Erro: ' + e.message;
+        document.getElementById('status').className = 'error';
+        return 'error';
+      }
+    }
+
+    async function getQR() {
+      try {
+        const r = await fetch(`${API}/instance/connect/${INSTANCE}`, { headers });
+        const d = await r.json();
+        const qrDiv = document.getElementById('qr');
+
+        if (d.base64) {
+          qrDiv.innerHTML = `<img src="${d.base64}" width="300" />`;
+          return true;
+        } else if (d.code) {
+          qrDiv.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(d.code)}" width="300" />`;
+          return true;
+        } else if (d.pairingCode) {
+          qrDiv.innerHTML = `<p style="font-size:2em;letter-spacing:4px;font-weight:bold">${d.pairingCode}</p><p>Use "Vincular com número" no WhatsApp</p>`;
+          return true;
+        } else {
+          qrDiv.innerHTML = `<p>QR não disponível (count: ${d.count || 0})</p><p style="font-size:0.8em;color:#666">A Evolution API pode precisar de um momento...</p>`;
+          return false;
+        }
+      } catch (e) {
+        document.getElementById('qr').innerHTML = `<p>Erro: ${e.message}</p>`;
+        return false;
+      }
+    }
+
+    async function refresh() {
+      const state = await checkState();
+      if (state === 'open') {
+        document.getElementById('qr').innerHTML = '<p style="font-size:3em">✅</p><p>WhatsApp conectado com sucesso!</p>';
+        return;
+      }
+      await getQR();
+    }
+
+    // Poll every 3 seconds
+    refresh();
+    setInterval(async () => {
+      const state = await checkState();
+      if (state !== 'open') await getQR();
+    }, 3000);
+  </script>
+</body>
+</html>
