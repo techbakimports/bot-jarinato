@@ -24,12 +24,9 @@ def _criar_token(atendente_id: str) -> str:
 
 @router.post("/register", response_model=AtendenteOut, status_code=201)
 async def register(dados: AtendenteRegister, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Atendente))
-    existe_algum = result.first() is not None
-
-    if existe_algum:
-        # TODO: exigir JWT aqui quando implementar middleware de auth
-        pass
+    result = await db.execute(select(Atendente).limit(1))
+    if result.first() is not None:
+        raise HTTPException(status_code=403, detail="Registro desabilitado. Use o painel de administração.")
 
     result = await db.execute(select(Atendente).where(Atendente.email == dados.email))
     if result.scalar_one_or_none():

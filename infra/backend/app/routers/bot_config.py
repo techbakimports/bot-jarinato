@@ -7,16 +7,16 @@ via API PATCH quando solicitado.
 
 import json
 import os
-import urllib.request
-import urllib.error
+from pathlib import Path
 from typing import Optional
+import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.config import settings
 
 router = APIRouter(prefix="/bot", tags=["bot-config"])
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "bot_config.json")
+CONFIG_FILE = Path(__file__).resolve().parent.parent.parent / "bot_config.json"
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -56,14 +56,16 @@ class TypebotSyncRequest(BaseModel):
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _load_config() -> dict:
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+    if CONFIG_FILE.exists():
+        with CONFIG_FILE.open("r", encoding="utf-8") as f:
             return json.load(f)
     return BotConfig().model_dump()
 
 def _save_config(data: dict):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+    tmp = CONFIG_FILE.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    tmp.replace(CONFIG_FILE)
 
 def _build_typebot_flow(cfg: BotConfig, start_event_id: str, fastapi_internal_url: str = "http://fastapi:8000") -> dict:
     """Monta o JSON do fluxo Typebot a partir da config simplificada."""
@@ -205,10 +207,12 @@ def _build_typebot_flow(cfg: BotConfig, start_event_id: str, fastapi_internal_ur
         ],
     })
 
+    last_welcome_block_id = welcome_blocks[-1]["id"] if welcome_blocks else groups[0]["blocks"][-1]["id"]
+
     # Edges — conectam os grupos em sequência
     edges = [
         {"id": "e0", "from": {"eventId": start_event_id}, "to": {"groupId": "grp_saudacao"}},
-        {"id": "e1", "from": {"groupId": "grp_saudacao", "blockId": welcome_blocks[-1]["id"] if welcome_blocks else "blk_s1"}, "to": {"groupId": "grp_nome"}},
+        {"id": "e1", "from": {"groupId": "grp_saudacao", "blockId": last_welcome_block_id}, "to": {"groupId": "grp_nome"}},
         {"id": "e2", "from": {"groupId": "grp_nome", "blockId": "blk_n2"}, "to": {"groupId": "grp_motivo"}},
     ]
     # Cada opção do menu leva ao mesmo grupo "aguardar"
@@ -272,31 +276,23 @@ async def sync_typebot(req: TypebotSyncRequest):
             detail="Faltam credenciais do Typebot. Defina TYPEBOT_TOKEN, TYPEBOT_ID e TYPEBOT_START_EVENT_ID no .env ou envie no body."
         )
 
-    flow = _build_typebot_flow(cfg, start_event_id)
-    payload = json.dumps({"typebot": flow}).encode("utf-8")
-
+    flow = _build_typebot_flow(cfg, start_event_id, typebot_url)
     api_url = f"{typebot_url}/api/v1/typebots/{typebot_id}"
-    http_req = urllib.request.Request(
-        api_url,
-        data=payload,
-        method="PATCH",
-        headers={
-            "Authorization": f"Bearer {typebot_token}",
-            "Content-Type": "application/json",
-        },
-    )
 
     try:
-        with urllib.request.urlopen(http_req, timeout=15) as resp:
-            body = resp.read().decode("utf-8")
-            return {
-                "status": "ok",
-                "message": "Fluxo atualizado no Typebot com sucesso!",
-                "typebot_status": resp.status,
-                "response": body[:300],
-            }
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8")[:500]
-        raise HTTPException(status_code=502, detail=f"Erro ao atualizar Typebot ({e.code}): {detail}")
-    except Exception as e:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.patch(
+                api_url,
+                json={"typebot": flow},
+                headers={"Authorization": f"Bearer {typebot_token}"},
+            )
+        if resp.is_error:
+            raise HTTPException(status_code=502, detail=f"Erro ao atualizar Typebot ({resp.status_code}): {resp.text[:500]}")
+        return {
+            "status": "ok",
+            "message": "Fluxo atualizado no Typebot com sucesso!",
+            "typebot_status": resp.status_code,
+            "response": resp.text[:300],
+        }
+    except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail=f"Erro de conexão com Typebot: {str(e)}")
